@@ -27,14 +27,16 @@ public class User implements UserDetails {
   private String email;
 
   @NotBlank
-  private String password;   // rename from passwordHash
+  private String password;
 
   private boolean verified = false;
 
+  private boolean hasCandidateProfile = false;
+  private boolean hasEmployerProfile = false;
+  private String lastActiveRole; // "CANDIDATE" or "EMPLOYER"
+
   @Transient
   private String rawPassword;
-
-  // 🔐 UserDetails required methods
 
   @Override
   public Collection<? extends GrantedAuthority> getAuthorities() {

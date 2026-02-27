@@ -1,20 +1,34 @@
 package ie.atu.Authentication.exception;
 
+import ie.atu.Authentication.repository.UserRepository;
+import ie.atu.Authentication.service.EmailService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.Map;
 
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class AuthExceptionHandler {
+
+  private final UserRepository userRepo;
+  private final EmailService emailService;
 
   @ExceptionHandler(DisabledException.class)
   public ResponseEntity<?> handleDisabled(DisabledException ex) {
+    // If the message is an email, resend activation
+    String email = ex.getMessage();
+    if (email != null && email.contains("@")) {
+      userRepo.findByEmail(email).ifPresent(emailService::sendActivationEmail);
+    }
+
     return ResponseEntity
         .status(HttpStatus.FORBIDDEN)
         .body(Map.of("error", "Account not activated. Please check your email."));
@@ -32,5 +46,19 @@ public class AuthExceptionHandler {
     return ResponseEntity
         .status(HttpStatus.NOT_FOUND)
         .body(Map.of("error", "Account not found. Please register."));
+  }
+
+  @ExceptionHandler(DataIntegrityViolationException.class)
+  public ResponseEntity<?> handleDataIntegrity(DataIntegrityViolationException ex) {
+    return ResponseEntity
+        .status(HttpStatus.CONFLICT)
+        .body(Map.of("error", "Database error: " + ex.getRootCause().getMessage()));
+  }
+
+  @ExceptionHandler(Exception.class)
+  public ResponseEntity<?> handleGeneralException(Exception ex) {
+    return ResponseEntity
+        .status(HttpStatus.INTERNAL_SERVER_ERROR)
+        .body(Map.of("error", "Internal server error: " + ex.getMessage()));
   }
 }

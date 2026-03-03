@@ -1,7 +1,7 @@
 package ie.atu.Authentication.controller;
 
+import ie.atu.Authentication.security.JwtUtil;
 import ie.atu.Authentication.dto.LoginRequest;
-import ie.atu.Authentication.model.VerificationToken;
 import ie.atu.Authentication.repository.VerificationTokenRepository;
 import ie.atu.Authentication.service.UserService;
 import ie.atu.Authentication.model.User;
@@ -11,16 +11,18 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.time.LocalDateTime;
+
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
   private final UserRepository userRepo;
   private final UserService userService;
   private final VerificationTokenRepository tokenRepo;
+  private final JwtUtil jwtUtil;
 
   @PostMapping("/sign-in")
   // If validation fails:
@@ -31,7 +33,7 @@ public class AuthController {
 
     if (token == null) {
       return ResponseEntity.ok(Map.of(
-          "message", "Check your email to activate your account."));
+          "message", "Account activation email sent."));
     }
 
     User user = userRepo.findByEmail(req.getEmail()).orElseThrow();
@@ -45,22 +47,7 @@ public class AuthController {
 
   @GetMapping("/activate")
   public ResponseEntity<?> activateAccount(@RequestParam String token) {
-    VerificationToken verificationToken = tokenRepo.findByToken(token)
-        .orElseThrow(() -> new RuntimeException("Invalid token"));
-
-    if (verificationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
-      return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-          .body(Map.of("error", "Token expired"));
-    }
-
-    User user = verificationToken.getUser();
-    user.setVerified(true);
-    userRepo.save(user);
-
-    // Redirect to frontend sign-in page with success flag
-    return ResponseEntity.status(HttpStatus.FOUND)
-        .header("Location", "http://localhost:5173/sign-in?activated=true")
-        .build();
+    return userService.activateAccount(token);
   }
 
   @PostMapping("/forgot-password")
@@ -77,5 +64,42 @@ public class AuthController {
           .body(Map.of("error", "Invalid or expired token"));
     }
     return ResponseEntity.ok(Map.of("message", "Password reset successfully! You can now log in."));
+  }
+
+  @GetMapping("/me")
+  public ResponseEntity<?> getCurrentUser(@RequestHeader(value = "Authorization", required = false) String authHeader) {
+    try {
+      // 1. Validate Header Structure
+      if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .body(Map.of("error", "Missing or invalid Authorization header"));
+      }
+
+      // 2. Extract and Validate Token
+      String token = authHeader.substring(7);
+      String email = jwtUtil.extractEmail(token);
+
+      if (email == null) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .body(Map.of("error", "Invalid or expired token"));
+      }
+
+      // 3. Fetch User and Map Response
+      return userRepo.findByEmail(email)
+          .map(user -> {
+            Map<String, Object> response = new HashMap<>();
+            response.put("email", user.getEmail());
+            response.put("hasCandidateProfile", user.isHasCandidateProfile());
+            response.put("hasEmployerProfile", user.isHasEmployerProfile());
+            response.put("lastActiveRole", user.getLastActiveRole() != null ? user.getLastActiveRole() : "");
+            return ResponseEntity.ok(response);
+          })
+          .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+              .body(Map.of("error", "User not found")));
+
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("error", "An unexpected error occurred"));
+    }
   }
 }

@@ -21,18 +21,7 @@ public class AuthExceptionHandler {
   private final UserRepository userRepo;
   private final EmailService emailService;
 
-  @ExceptionHandler(DisabledException.class)
-  public ResponseEntity<?> handleDisabled(DisabledException ex) {
-    // If the message is an email, resend activation
-    String email = ex.getMessage();
-    if (email != null && email.contains("@")) {
-      userRepo.findByEmail(email).ifPresent(emailService::sendActivationEmail);
-    }
 
-    return ResponseEntity
-        .status(HttpStatus.FORBIDDEN)
-        .body(Map.of("error", "Account not activated. Please check your email."));
-  }
 
   @ExceptionHandler(BadCredentialsException.class)
   public ResponseEntity<?> handleBadCredentials(BadCredentialsException ex) {

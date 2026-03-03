@@ -77,7 +77,7 @@ public class AuthController {
 
       // 2. Extract and Validate Token
       String token = authHeader.substring(7);
-      String email = jwtUtil.extractEmail(token);
+      String email = jwtUtil.extractId(token);
 
       if (email == null) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

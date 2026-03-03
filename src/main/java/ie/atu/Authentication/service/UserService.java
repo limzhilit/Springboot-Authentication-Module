@@ -6,16 +6,12 @@ import ie.atu.Authentication.model.VerificationToken;
 import ie.atu.Authentication.repository.UserRepository;
 import ie.atu.Authentication.repository.VerificationTokenRepository;
 import jakarta.transaction.Transactional;
-import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -27,7 +23,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class UserService implements UserDetailsService {
+public class UserService {
 
   private final UserRepository userRepo;
   private final AuthenticationManager authManager;
@@ -42,19 +38,18 @@ public class UserService implements UserDetailsService {
     if (user == null) {
       return createPendingUser(email, password);
     }
-
     if (!user.isVerified()) {
-
-      if (email != null && email.contains("@")) {
-        userRepo.findByEmail(email).ifPresent(emailService::sendActivationEmail);
-      }
+      userRepo.findByEmail(email).ifPresent(emailService::sendActivationEmail);
+      return null;
     }
 
     Authentication auth = authManager.authenticate(
-        new UsernamePasswordAuthenticationToken(email, password));
+        new UsernamePasswordAuthenticationToken(email, password)
+    );
 
-    user = (User) auth.getPrincipal();
-    assert user != null;
+    user = userRepo.findByEmail(email)
+        .orElseThrow(() -> new RuntimeException("User not found"));
+
     return jwtUtil.generateToken(user, rememberMe);
   }
 
@@ -67,7 +62,7 @@ public class UserService implements UserDetailsService {
 
     emailService.sendActivationEmail(user);
 
-    return null; // indicates "activation email sent"
+    return null;
   }
 
   public void initiatePasswordReset(String email) {
@@ -91,7 +86,6 @@ public class UserService implements UserDetailsService {
 
   @Transactional
   public ResponseEntity<?> activateAccount(String token) {
-    // 1. Find the token
     Optional<VerificationToken> optionalToken = tokenRepo.findByToken(token);
 
     if (optionalToken.isEmpty()) {
@@ -101,13 +95,11 @@ public class UserService implements UserDetailsService {
 
     VerificationToken verificationToken = optionalToken.get();
 
-    // 2. Check Expiration
     if (verificationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
       return ResponseEntity.status(HttpStatus.BAD_REQUEST)
           .body(Map.of("error", "Token expired"));
     }
 
-    // 3. Get User and Verify
     User user = verificationToken.getUser();
     if (user == null) {
       return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -117,25 +109,14 @@ public class UserService implements UserDetailsService {
     user.setVerified(true);
     userRepo.save(user);
 
-    // 4. Cleanup: Delete the token so it can't be reused
     tokenRepo.delete(verificationToken);
 
-    // 5. Generate JWT for auto-login
     String jwt = jwtUtil.generateToken(user, false);
     String encodedJwt = URLEncoder.encode(jwt, StandardCharsets.UTF_8);
 
-    // 6. Redirect to Frontend
     return ResponseEntity.status(HttpStatus.FOUND)
         .header("Location", "http://localhost:5173/sign-in?token=" + encodedJwt + "&activated=true")
         .build();
-  }
-
-  @Override
-  public @NonNull UserDetails loadUserByUsername(@NonNull String id) {
-    Long userId = Long.parseLong(id);
-
-    return userRepo.findById(userId)
-        .orElseThrow(() -> new UsernameNotFoundException("User not found"));
   }
 
 }

@@ -6,7 +6,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -15,13 +14,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.Map;
 
 @RestControllerAdvice
-@RequiredArgsConstructor
 public class AuthExceptionHandler {
-
-  private final UserRepository userRepo;
-  private final EmailService emailService;
-
-
 
   @ExceptionHandler(BadCredentialsException.class)
   public ResponseEntity<?> handleBadCredentials(BadCredentialsException ex) {
@@ -39,9 +32,10 @@ public class AuthExceptionHandler {
 
   @ExceptionHandler(DataIntegrityViolationException.class)
   public ResponseEntity<?> handleDataIntegrity(DataIntegrityViolationException ex) {
+    String message = (ex.getRootCause() != null) ? ex.getRootCause().getMessage() : ex.getMessage();
     return ResponseEntity
         .status(HttpStatus.CONFLICT)
-        .body(Map.of("error", "Database error: " + ex.getRootCause().getMessage()));
+        .body(Map.of("error", "Database error: " + message));
   }
 
   @ExceptionHandler(Exception.class)

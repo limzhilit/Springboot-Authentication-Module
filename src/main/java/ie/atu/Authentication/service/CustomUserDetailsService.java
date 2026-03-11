@@ -1,4 +1,4 @@
-package ie.atu.Authentication.security;
+package ie.atu.Authentication.service;
 
 import ie.atu.Authentication.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -11,11 +11,13 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class CustomUserDetailsService implements UserDetailsService {
 
-  private final UserRepository userRepo;
+  private final UserRepository userRepository;
 
   @Override
-  public UserDetails loadUserByUsername(String email) {
-    return userRepo.findByEmail(email)
-        .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
+  public UserDetails loadUserByUsername(String username) {
+    System.out.println("loadUserByUsername called: " + username);
+
+    return userRepository.findByEmail(username)
+        .orElseThrow(() -> new UsernameNotFoundException("User not found"));
   }
 }

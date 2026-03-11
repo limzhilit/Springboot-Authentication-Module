@@ -2,7 +2,6 @@ package ie.atu.Authentication.security;
 
 import ie.atu.Authentication.model.User;
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.io.Decoders;
@@ -16,20 +15,35 @@ public class JwtUtil {
   @Value("${jwt.secret}")
   private String secret;
 
+  // Access token: short-lived (15 mins)
+  private static final long ACCESS_TOKEN_EXPIRY = 15 * 60 * 1000L;
+
+  // Refresh token: long-lived (30 days, like Google)
+  private static final long REFRESH_TOKEN_EXPIRY = 30L * 24 * 60 * 60 * 1000L;
+
   // Use SecretKey for better type safety in 0.12.x
   private javax.crypto.SecretKey getSigningKey() {
     byte[] keyBytes = Decoders.BASE64.decode(secret);
     return Keys.hmacShaKeyFor(keyBytes);
   }
 
-  public String generateToken(User user, boolean rememberMe) {
-    long currentExpiration = rememberMe ? 7 * 24 * 60 * 60 * 1000L : 60 * 60 * 1000L;
-
+  public String generateAccessToken(User user) {
     return Jwts.builder()
         .subject(String.valueOf(user.getId()))
         .claim("role", "USER")
+        .claim("type", "access")
         .issuedAt(new Date())
-        .expiration(new Date(System.currentTimeMillis() + currentExpiration))
+        .expiration(new Date(System.currentTimeMillis() + ACCESS_TOKEN_EXPIRY))
+        .signWith(getSigningKey())
+        .compact();
+  }
+
+  public String generateRefreshToken(User user) {
+    return Jwts.builder()
+        .subject(String.valueOf(user.getId()))
+        .claim("type", "refresh")
+        .issuedAt(new Date())
+        .expiration(new Date(System.currentTimeMillis() + REFRESH_TOKEN_EXPIRY))
         .signWith(getSigningKey())
         .compact();
   }
@@ -47,13 +61,5 @@ public class JwtUtil {
         .build()
         .parseSignedClaims(token)
         .getPayload();
-  }
-
-  public String extractId(String token) {
-    try {
-      return validateToken(token).getSubject();
-    } catch (JwtException | IllegalArgumentException e) {
-      return null;
-    }
   }
 }

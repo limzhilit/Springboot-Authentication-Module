@@ -2,9 +2,8 @@ package ie.atu.Authentication.service;
 
 import ie.atu.Authentication.security.JwtUtil;
 import ie.atu.Authentication.model.User;
-import ie.atu.Authentication.model.VerificationToken;
 import ie.atu.Authentication.repository.UserRepository;
-import ie.atu.Authentication.repository.VerificationTokenRepository;
+import io.jsonwebtoken.Claims;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,44 +24,50 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class UserService {
 
+  private final AuthService authService;
   private final UserRepository userRepo;
   private final AuthenticationManager authManager;
   private final JwtUtil jwtUtil;
   private final EmailService emailService;
   private final PasswordEncoder passwordEncoder;
-  private final VerificationTokenRepository tokenRepo;
 
-  public String loginOrCreatePendingUser(String email, String password, boolean rememberMe) {
+  public Map<String, String> upsertUser(String email, String password) {
+    System.out.println("upsertUser called with email: " + email);
     User user = userRepo.findByEmail(email).orElse(null);
+    System.out.println("User found: " + user);
 
     if (user == null) {
-      return createPendingUser(email, password);
-    }
-    if (!user.isVerified()) {
-      userRepo.findByEmail(email).ifPresent(emailService::sendActivationEmail);
+      createNewUser(email, password);
       return null;
     }
+
+    if (!user.isVerified()) {
+      emailService.sendActivationEmail(user);
+      System.out.println("Email sent: " + user);
+      System.out.println("user not verified" );
+
+      return null;
+    }
+
+    System.out.println("user authenticating" );
 
     Authentication auth = authManager.authenticate(
         new UsernamePasswordAuthenticationToken(email, password)
     );
 
-    user = userRepo.findByEmail(email)
-        .orElseThrow(() -> new RuntimeException("User not found"));
+    System.out.println("user authenticated" );
 
-    return jwtUtil.generateToken(user, rememberMe);
+    return authService.login(user);
   }
 
-  public String createPendingUser(String email, String rawPassword) {
+  public void createNewUser(String email, String rawPassword) {
     User user = new User();
     user.setEmail(email);
     user.setPassword(passwordEncoder.encode(rawPassword));
     user.setVerified(false);
     userRepo.save(user);
-
     emailService.sendActivationEmail(user);
-
-    return null;
+    System.out.println("User created: " + user);
   }
 
   public void initiatePasswordReset(String email) {
@@ -70,52 +75,49 @@ public class UserService {
   }
 
   @Transactional
-  public boolean resetPassword(String token, String newPassword) {
-    return tokenRepo.findByToken(token)
-        .filter(vt -> vt.getType() == VerificationToken.TokenType.PASSWORD_RESET)
-        .filter(vt -> vt.getExpiryDate().isAfter(java.time.LocalDateTime.now()))
-        .map(vt -> {
-          User user = vt.getUser();
-          user.setPassword(passwordEncoder.encode(newPassword));
-          user.setVerified(true); // reset implies valid email
-          userRepo.save(user);
-          tokenRepo.delete(vt);
-          return true;
-        }).orElse(false);
+  public ResponseEntity<?> resetPassword(String token, String newPassword) {
+    long userId;
+    try {
+      Claims claims = jwtUtil.validateToken(token);
+      userId = Long.parseLong(claims.getSubject());
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+          .body(Map.of("error", "Invalid or expired activation token."));
+    }
+
+    User user = userRepo.findById(userId)
+        .orElseThrow(() -> new RuntimeException("User not found"));
+
+    user.setPassword(passwordEncoder.encode(newPassword));
+    userRepo.save(user);
+    return ResponseEntity.ok(Map.of("message", "Password has been reset successfully."));
   }
 
   @Transactional
   public ResponseEntity<?> activateAccount(String token) {
-    Optional<VerificationToken> optionalToken = tokenRepo.findByToken(token);
-
-    if (optionalToken.isEmpty()) {
+    long userId;
+    try {
+      Claims claims = jwtUtil.validateToken(token);
+      userId = Long.parseLong(claims.getSubject());
+    } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-          .body(Map.of("error", "Activation token is invalid or not found."));
+          .body(Map.of("error", "Invalid or expired activation token."));
     }
 
-    VerificationToken verificationToken = optionalToken.get();
-
-    if (verificationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
-      return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-          .body(Map.of("error", "Token expired"));
-    }
-
-    User user = verificationToken.getUser();
-    if (user == null) {
-      return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-          .body(Map.of("error", "User not found."));
-    }
+    User user = userRepo.findById(userId)
+        .orElseThrow(() -> new RuntimeException("User not found"));
 
     user.setVerified(true);
     userRepo.save(user);
 
-    tokenRepo.delete(verificationToken);
-
-    String jwt = jwtUtil.generateToken(user, false);
-    String encodedJwt = URLEncoder.encode(jwt, StandardCharsets.UTF_8);
+    Map<String, String> tokens = authService.login(user);
+    String encodedAccessToken = URLEncoder.encode(tokens.get("accessToken"), StandardCharsets.UTF_8);
+    String encodedRefreshToken = URLEncoder.encode(tokens.get("refreshToken"), StandardCharsets.UTF_8);
 
     return ResponseEntity.status(HttpStatus.FOUND)
-        .header("Location", "http://localhost:5173/sign-in?token=" + encodedJwt + "&activated=true")
+        .header("Location",
+            "http://localhost:5173/sign-in?token=" + encodedAccessToken + "&refreshToken=" + encodedRefreshToken
+                + "&activated=true")
         .build();
   }
 

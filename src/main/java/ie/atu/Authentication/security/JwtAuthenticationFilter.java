@@ -4,7 +4,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -28,6 +27,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                   HttpServletResponse response,
                                   FilterChain filterChain) throws ServletException, IOException {
 
+    String path = request.getRequestURI();
+    System.out.println("Path: " + path);
+    // Skip H2 console in dev
+    String servletPath = request.getServletPath();
+    if (servletPath != null && servletPath.startsWith("/h2-console") || servletPath.startsWith("/swagger-ui")) {
+      filterChain.doFilter(request, response);
+      return;
+    }
+
     String authHeader = request.getHeader("Authorization");
 
     if (authHeader == null || !authHeader.startsWith("Bearer ")) {
@@ -36,7 +44,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     String token = authHeader.substring(7);
-    String id = jwtUtil.extractId(token);
+    String id = jwtUtil.validateToken(token).getSubject();
 
     if (id != null && SecurityContextHolder.getContext().getAuthentication() == null) {
       UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(

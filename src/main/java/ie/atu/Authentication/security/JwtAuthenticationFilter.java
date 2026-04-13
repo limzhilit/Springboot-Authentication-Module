@@ -29,16 +29,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     String path = request.getRequestURI();
     System.out.println("Path: " + path);
-    // Skip H2 console in dev
+
     String servletPath = request.getServletPath();
-    if (servletPath != null && servletPath.startsWith("/h2-console") || servletPath.startsWith("/swagger-ui")) {
+    if (servletPath != null && servletPath.startsWith("/h2-console")
+        || servletPath.startsWith("/swagger-ui")) {
       filterChain.doFilter(request, response);
+      return;
+    }
+    if (path.startsWith("/api/auth")) {
+      filterChain.doFilter(request, response);
+      return;
+    }
+    if (path.startsWith("/api/auth/refresh-token")) {
+      System.out.println("Refresh token path");
+      filterChain.doFilter(request, response); // skip auth check for refresh
       return;
     }
 
     String authHeader = request.getHeader("Authorization");
 
     if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+      System.out.println("No token in header");
       filterChain.doFilter(request, response);
       return;
     }

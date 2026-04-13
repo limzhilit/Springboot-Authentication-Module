@@ -12,14 +12,13 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
@@ -53,10 +52,12 @@ public class AuthController {
         ));
   }
 
-  @PostMapping("/refresh")
-  public ResponseEntity<?> refresh(
-      @CookieValue(name = "refreshToken", required = false) String refreshToken) {
+  @PostMapping("/refresh-token")
+  public ResponseEntity<?> refresh(@RequestBody Map<String, String> requestBody) {
+    System.out.println("Refresh token path correct: " + requestBody);
+    String refreshToken = requestBody.get("refreshToken");
     if (refreshToken == null) {
+      System.out.println("Refresh token is null");
       return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Refresh token missing");
     }
     Map<String, String> tokens = authService.refresh(refreshToken);

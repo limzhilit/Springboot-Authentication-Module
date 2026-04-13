@@ -49,7 +49,7 @@ public class SecurityConfig {
         .csrf(AbstractHttpConfigurer::disable)
         .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
         .authorizeHttpRequests(auth -> auth
-            .requestMatchers("/auth/**", "/h2-console/**", "/v3/api-docs/**", "/swagger-ui/**").permitAll()
+            .requestMatchers("/auth/**", "/api/auth/**","/h2-console/**", "/v3/api-docs/**", "/swagger-ui/**").permitAll()
             .anyRequest().authenticated())
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .build();

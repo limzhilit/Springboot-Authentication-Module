@@ -39,11 +39,15 @@ public class AuthService {
     Claims claims = jwtUtil.validateToken(refreshToken);
 
     RefreshToken stored = refreshTokenRepository.findByToken(refreshToken)
-        .orElseThrow(() -> new RuntimeException("Token not found"));
-
+        .orElseThrow(() -> {
+          System.out.println("Refresh token not found in DB: " + refreshToken);
+          return new RuntimeException("Token not found");
+        });
     if (stored.isRevoked()) {
+      System.out.println("Token revoked");
       throw new RuntimeException("Token revoked — please log in again");
     }
+    System.out.println("Expires at: " + stored.getExpiresAt());
 
     User user = stored.getUser();
 

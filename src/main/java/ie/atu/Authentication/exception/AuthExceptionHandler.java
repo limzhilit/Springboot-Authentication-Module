@@ -44,4 +44,14 @@ public class AuthExceptionHandler {
         .status(HttpStatus.INTERNAL_SERVER_ERROR)
         .body(Map.of("error", "Internal server error: " + ex.getMessage()));
   }
+
+  @ExceptionHandler(EmailNotVerifiedException.class)
+  public ResponseEntity<?> handleEmailNotVerifiedException(EmailNotVerifiedException ex) {
+    return ResponseEntity
+        .status(HttpStatus.UNAUTHORIZED) // or 403
+        .body(Map.of(
+            "error", "EMAIL_NOT_VERIFIED",
+            "message", ex.getMessage()
+        ));
+  }
 }

@@ -1,0 +1,7 @@
+package ie.atu.Authentication.exception;
+
+public class EmailNotVerifiedException extends RuntimeException {
+  public EmailNotVerifiedException(String message) {
+    super(message);
+  }
+}

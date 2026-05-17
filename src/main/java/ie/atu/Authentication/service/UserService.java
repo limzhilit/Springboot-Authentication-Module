@@ -1,5 +1,6 @@
 package ie.atu.Authentication.service;
 
+import ie.atu.Authentication.exception.EmailNotVerifiedException;
 import ie.atu.Authentication.security.JwtUtil;
 import ie.atu.Authentication.model.User;
 import ie.atu.Authentication.repository.UserRepository;
@@ -45,8 +46,7 @@ public class UserService {
       emailService.sendActivationEmail(user);
       System.out.println("Email sent: " + user);
       System.out.println("user not verified" );
-
-      return null;
+      throw new EmailNotVerifiedException("An activation email has been sent to " + email + ". ");
     }
 
     System.out.println("user authenticating" );

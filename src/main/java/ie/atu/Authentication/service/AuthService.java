@@ -3,7 +3,6 @@ package ie.atu.Authentication.service;
 import ie.atu.Authentication.model.RefreshToken;
 import ie.atu.Authentication.model.User;
 import ie.atu.Authentication.repository.RefreshTokenRepository;
-//import ie.atu.Authentication.repository.UserRepository;
 import ie.atu.Authentication.security.JwtUtil;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +16,6 @@ import java.util.Map;
 public class AuthService {
 
   private final RefreshTokenRepository refreshTokenRepository;
-  // private final UserRepository userRepository;
   private final JwtUtil jwtUtil;
 
   public Map<String, String> login(User user) {
@@ -51,7 +49,7 @@ public class AuthService {
 
     User user = stored.getUser();
 
-    // ✅ SLIDING WINDOW — reset the 30-day clock on every use
+    // SLIDING WINDOW — reset the 30-day clock on every use
     String newRefreshToken = jwtUtil.generateRefreshToken(user);
     stored.setToken(newRefreshToken); // rotate token
     stored.setExpiresAt(new Date(System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000L));
@@ -63,7 +61,7 @@ public class AuthService {
     return Map.of("accessToken", newAccessToken, "refreshToken", newRefreshToken);
   }
 
-  // Google-style logout: revoke all sessions
+  // revoke all sessions
   public void logout(User user) {
     refreshTokenRepository.deleteAllByUser(user);
   }
